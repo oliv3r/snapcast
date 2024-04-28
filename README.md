@@ -49,6 +49,7 @@ You can either install Snapcast from a prebuilt package (recommended for new use
 
 Snapcast packages are available for several Linux distributions:
 
+- [Containers](doc/install.md#containers)
 - [Debian](doc/install.md#debian)
 - [OpenWrt](doc/install.md#openwrt)
 - [Alpine Linux](doc/install.md#alpine-linux)

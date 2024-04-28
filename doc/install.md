@@ -2,11 +2,135 @@
 
 Snapcast packages are available for several Linux distributions:
 
+- [Containers](#containers)
 - [Debian](#debian)
 - [OpenWrt](#openwrt)
 - [Alpine Linux](#alpine-linux)
 - [Archlinux](#archlinux)
 - [Void Linux](#void-linux)
+
+## Containers
+
+Snapcast containers can be used with container runtimes such as podman and
+docker. Using [docker](https://docker.com) as example, running snapserver is
+as simple as
+
+```
+docker run --rm --interactive --tty ghcr.io/badaix/snapcast/snapserver:latest
+```
+
+To properly use snapcast with avahi and the like, a few more volumes will be
+needed, `/var/run/dbus` and `/var/run/avahi-daemon`. To share and expose the
+snapcast fifo a volume for this is also needed, `/var/run/snapcast` is the
+directory holding the fifo by default. Finally also
+[snapweb](https://github.com/badaix/snapweb) can be made available using a
+volume. To persist configuration another docker volume is required.
+
+Editing configuration requires to edit the configuration files within the
+persistent volume, and starting to container with the argument `/bin/sh` will
+open a shell to the container, without starting `snapserver` itself. Thus a
+full example would look like:
+
+```
+docker run --rm \
+           --interactive \
+           --tty \
+           --volume /var/run/dbus:/var/run/dbus:rw \
+           --volume /var/run/avahi-daemon:/var/run/avahi-daemon:rw \
+           --volume snapweb:/usr/share/snapservert/snapweb \
+           --volume snapserver:/var/lib/snapserver \
+           --volume snapfifo:/var/run/snapcast \
+           ghcr.io/badaix/snapcast/snapserver:latest /bin/sh
+```
+
+> __Note:__ Due to containerization, it is not expected that anything on the
+> host would want to access the snapfifo. To do so anyway, the snapfifo can
+> also be a bind-mount instead, e.g. `--volume /var/run/snapcast:/var/run/snapcast`
+> and can be used as `/var/run/snapcast/snapfifo` on the host as normal.
+
+### Compose
+Instead of manually running these things, compose can be used as well. A loose
+compose file could be:
+
+```yaml
+networks:
+  snapserver: {}
+
+volumes:
+  snapserver:
+  snapfifo:
+  snapweb:
+
+services:
+  snapweb:
+    image: ghcr.io/badaix/snapweb/snapweb:latest
+    volumes:
+      - snapweb:/snapweb
+    restart: no
+
+  snapserver:
+    image: ghcr.io/badaix/snapcast/snapserver:latest
+    depends_on:
+      - snapweb
+    volumes:
+      - /var/run/dbus:/var/run/dbus:rw
+      - /var/run/avahi-daemon:/var/run/avahi-daemon:rw
+      - snapweb:/usr/share/snapserver/snapweb
+      - snapserver:/var/lib/snapserver
+      - snapfifo:/var/run/snapcast
+    networks:
+      - snapserver
+    ports:
+      - "1704:1704/tcp"
+      - "1705:1705/tcp"
+      - "1780:1780/tcp"
+      - "4953:4953/tcp"
+      - "5000:5000/tcp"
+      - "7000:7000/tcp"
+    restart: unless-stopped
+```
+
+> __Note:__ Locking down the container using `cap_deny: all`, ulimits etc is
+> left as an exercise to the reader.
+
+### Configuration
+
+It is also possible to store the server config in either the persistent
+`/var/lib/snapserver` directory or outside of the container, to store it in a
+git repository for example. To use an external configuration file, an additional
+volume `./snapserver.conf:/etc/snapserver.conf` will have to be supplied.
+
+> __Note:__ The script within the container will check for the existence of
+> `/var/lib/snapserver/snapserver.conf' and use that instead of
+> `/etc/snapserver.conf`. So if a configuration file is stored in this
+> persistent location, it may need to be removed/extracted when using an
+> external configuration file.
+> The actual file used is generated from either of these and stored in
+> `/var/run/snapserver/snapserver.conf`. To use a different configuration file
+> the container will need to be started in a special way, by invoking the
+> snapcast binary with the `--config` argument.
+
+### Airplay and Librespot
+
+While it is perfectly acceptable to manually edit the `snapserver.conf` file
+to setup airplay and librespot, the container checks for a few environment
+variables to configure airplay and librespot during startup. Some sed magic is
+used here, so any typical `&` (ampersant) characters need to be escaped `\&`.
+These variables can be set via the various docker/compose environment variable
+tricks.
+
+The environment variable `AIRPLAY1`, `AIRPLAY2` and `LIBRESPOT` will contain
+the parameters as described in [configuration.md](configuration.md), without
+the leading `?name=` part. Thus for `librespot` this would look like
+`LIBSRESPOT=myspot\&username=myname\&password=mypassword`.
+
+As this is stored in the `snapserver.conf` this would only be applied the first
+time. To always replace any librespot instance, set the environment variable
+to any value `LIBRESPOT_REPLACE=yes`. Similarly named environment variables
+exist for Airplay as well.
+
+> __Note:__ Setting to any value means that `LIBRESPOT_REPLACE=no` still
+> indicates to replace the content.
 
 ## Debian
 
