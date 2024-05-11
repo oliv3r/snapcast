@@ -397,17 +397,28 @@ int main(int argc, char** argv)
         }
 #endif
 
-        string mode = utils::string::split_left(mixer_mode->value(), ':', settings.player.mixer.parameter);
+        string para;
+        string mode = utils::string::split_left(mixer_mode->value(), ':', para);
         if (mode == "software")
+        {
             settings.player.mixer.mode = ClientSettings::Mixer::Mode::software;
+            settings.player.mixer.parameter = para;
+        }
         else if ((mode == "hardware") && hw_mixer_supported)
+        {
             settings.player.mixer.mode = ClientSettings::Mixer::Mode::hardware;
+            settings.player.mixer.parameter = para;
+        }
 #ifdef SUPPORTS_VOLUME_SCRIPT
         else if (mode == "script")
-            settings.player.mixer.mode = ClientSettings::Mixer::Mode::script;
+        {
+            settings.player.mixer.volume_script = para;
+        }
 #endif
         else if (mode == "none")
+        {
             settings.player.mixer.mode = ClientSettings::Mixer::Mode::none;
+        }
         else if ((mode == "?") || (mode == "help"))
         {
             cout << "mixer can be one of 'software', " << (hw_mixer_supported ? "'hardware', " : "")
@@ -420,6 +431,7 @@ int main(int argc, char** argv)
                  << (hw_mixer_supported ? " * hardware[:<mixer name>]\n" : "")
 #ifdef SUPPORTS_VOLUME_SCRIPT
                  << " * script[:<script filename>]"
+                 << "Note that script can used in addition to other mixer options."
 #endif
                  << "\n";
             exit(EXIT_SUCCESS);

@@ -42,11 +42,11 @@ struct ClientSettings
         {
             hardware,
             software,
-            script,
             none
         };
 
         Mode mode{Mode::software};
+        std::string volume_script{""};
         std::string parameter{""};
     };
 

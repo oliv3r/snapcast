@@ -92,14 +92,12 @@ Player::Player(boost::asio::io_context& io_context, const ClientSettings::Player
         case ClientSettings::Mixer::Mode::software:
             mixer = "software";
             break;
-        case ClientSettings::Mixer::Mode::script:
-            mixer = "script";
-            break;
         case ClientSettings::Mixer::Mode::none:
             mixer = "none";
             break;
     }
     LOG(INFO, LOG_TAG) << "Mixer mode: " << mixer << ", parameters: " << not_empty(settings_.mixer.parameter) << "\n";
+    LOG(INFO, LOG_TAG) << "Mixer volume script: " << settings_.mixer.volume_script << "\n";
     LOG(INFO, LOG_TAG) << "Sampleformat: " << (settings_.sample_format.isInitialized() ? settings_.sample_format.toString() : stream->getFormat().toString())
                        << ", stream: " << stream->getFormat().toString() << "\n";
 }
@@ -237,7 +235,8 @@ void Player::setVolume(const Volume& volume)
         else
             setVolume_exp(volume.volume, (dparam < 0) ? 10. : dparam);
     }
-    else if (settings_.mixer.mode == ClientSettings::Mixer::Mode::script)
+
+    if (!settings_.mixer.volume_script.empty())
     {
 #ifdef SUPPORTS_VOLUME_SCRIPT
         static std::optional<Volume> pending_volume_change;
@@ -252,7 +251,7 @@ void Player::setVolume(const Volume& volume)
             try
             {
                 namespace bp = boost::process;
-                mixer_script_process = bp::child(bp::exe = settings_.mixer.parameter,
+                mixer_script_process = bp::child(bp::exe = settings_.mixer.volume_script,
                                                  bp::args = {"--volume", cpt::to_string(volume.volume), "--mute", volume.mute ? "true" : "false"},
                                                  bp::on_exit(
                                                      [&](int ret_val, std::error_code ec)
@@ -271,7 +270,7 @@ void Player::setVolume(const Volume& volume)
             }
             catch (const std::exception& e)
             {
-                LOG(ERROR, LOG_TAG) << "Failed to run script '" + settings_.mixer.parameter + "', error: " << e.what() << "\n";
+                LOG(ERROR, LOG_TAG) << "Failed to run script '" + settings_.mixer.volume_script + "', error: " << e.what() << "\n";
                 pending_volume_change = std::nullopt;
             }
         }
