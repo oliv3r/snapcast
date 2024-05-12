@@ -252,7 +252,11 @@ void Player::setVolume(const Volume& volume)
             {
                 namespace bp = boost::process;
                 mixer_script_process = bp::child(bp::exe = settings_.mixer.volume_script,
-                                                 bp::args = {"--volume", cpt::to_string(volume.volume), "--mute", volume.mute ? "true" : "false"},
+                                                 bp::args = {
+                                                             "--instance", cpt::to_string(settings_.instance),
+                                                             "--volume", cpt::to_string(volume.volume),
+                                                             "--mute", volume.mute ? "true" : "false",
+                                                 },
                                                  bp::on_exit(
                                                      [&](int ret_val, std::error_code ec)
                                                      {
