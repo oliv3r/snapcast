@@ -256,6 +256,7 @@ void Player::setVolume(const Volume& volume)
                                                              "--instance", cpt::to_string(settings_.instance),
                                                              "--volume", cpt::to_string(volume.volume),
                                                              "--mute", volume.mute ? "true" : "false",
+                                                             "--pcmdevice", cpt::to_string(settings_.pcm_device.idx) + ":" + settings_.pcm_device.description,
                                                  },
                                                  bp::on_exit(
                                                      [&](int ret_val, std::error_code ec)
