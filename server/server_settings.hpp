@@ -82,6 +82,8 @@ struct ServerSettings
     Http http;
     Tcp tcp;
     Stream stream;
+    Stream source;
+    Stream socket;
     StreamingClient streamingclient;
     Logging logging;
 };

@@ -56,6 +56,7 @@ private:
     PcmStream::Listener* pcmListener_;
     ServerSettings settings_;
     boost::asio::io_context& io_context_;
+    encoder::EncoderFactory encoderFactory_;
 };
 
 } // namespace streamreader

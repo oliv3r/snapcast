@@ -80,6 +80,30 @@ int main(int argc, char* argv[])
         conf.add<Implicit<string>>("", "server.group", "the group to run as when daemonized", settings.server.group, &settings.server.group);
         conf.add<Implicit<string>>("", "server.datadir", "directory where persistent data is stored", settings.server.data_dir, &settings.server.data_dir);
 
+        // Dynamic source settings
+        conf.add<Value<bool>>("", "source.tcp.enabled", "enable dynamic tcp source", settings.source_tcp.enabled, &settings.source_tcp.enabled);
+        conf.add<Value<size_t>>("", "source.tcp.port", "which port the server should listen on", settings.source_tcp.port, &settings.source_tcp.port);
+        auto source_tcp_bind_to_address = conf.add<Value<string>>("", "source.tcp.bind_to_address", "address for the server to listen on",
+                                                                  settings.source_tcp.bind_to_address.front(), &settings.source_tcp.bind_to_address[0]);
+        conf.add<Value<string>>("", "source.tcp.name", "Default name for classic TCP stream", settings.source_pipe.name, &settings.source_pipe.name);
+        conf.add<Value<string>>("", "source.tcp.sampleformat", "Default sample format", settings.source_tcp.sampleFormat, &settings.source_tcp.sampleFormat);
+        conf.add<Value<string>>("", "source.tcp.codec", "Default transport codec\n(flac|ogg|opus|pcm)[:options]\nType codec:? to get codec specific options",
+                                settings.source_tcp.codec, &settings.source_tcp.codec);
+        conf.add<Value<size_t>>("", "source.tcp.chunk_ms", "Default stream read chunk size [ms]", settings.source_tcp.streamChunkMs, &settings.source_tcp.streamChunkMs);
+        conf.add<Value<int>>("", "source.tcp.buffer", "Default buffer [ms]", settings.source_tcp.bufferMs, &settings.soruce_tcp.bufferMs);
+        conf.add<Value<bool>>("", "source.tcp.send_to_muted", "Send audio to muted clients by default", settings.source_tcp.sendAudioToMutedClients,
+
+        conf.add<Value<bool>>("", "source.pipe.enabled", "enable dynamic pipe source", settings.source_tcp.enabled, &settings.source_pipe.enabled);
+        auto source_pipeValue = conf.add<Value<string>>("", "source.pipe.path", "Filepath of the fifo",
+                                                        settings.source_pipe.path, &settings.source_pipe.path);
+        conf.add<Value<string>>("", "source.pipe.name", "Default name for classic fifo pipe", settings.source_pipe.name, &settings.source_pipe.name);
+        conf.add<Value<string>>("", "source.pipe.sampleformat", "Default sample format", settings.source_pipe.sampleFormat, &settings.source_pipe.sampleFormat);
+        conf.add<Value<string>>("", "source.pipe.codec", "Default transport codec\n(flac|ogg|opus|pcm)[:options]\nType codec:? to get codec specific options",
+                                settings.source_pipe.codec, &settings.source_pipe.codec);
+        conf.add<Value<size_t>>("", "source.pipe.chunk_ms", "Default stream read chunk size [ms]", settings.source_pipe.streamChunkMs, &settings.source_pipe.streamChunkMs);
+        conf.add<Value<int>>("", "source.pipe.buffer", "Default buffer [ms]", settings.source_pipe.bufferMs, &settings.source_pipe.bufferMs);
+        conf.add<Value<bool>>("", "source.pipe.send_to_muted", "Send audio to muted clients by default", settings.source_pipe.sendAudioToMutedClients,
+
         // HTTP RPC settings
         conf.add<Value<bool>>("", "http.enabled", "enable HTTP Json RPC (HTTP POST and websockets)", settings.http.enabled, &settings.http.enabled);
         conf.add<Value<size_t>>("", "http.port", "which port the server should listen on", settings.http.port, &settings.http.port);
@@ -131,6 +155,12 @@ int main(int argc, char* argv[])
             op.parse(argc, argv);
             conf.parse(config_file);
             conf.parse(argc, argv);
+            if (source_tcp_bind_to_address->is_set())
+            {
+                settings.source_tcp.bind_to_address.clear();
+                for (size_t n = 0; n < source_tcp_bind_to_address->count(); ++n)
+                    settings.source_tcp.bind_to_address.push_back(source_tcp_bind_to_address->value(n));
+            }
             if (tcp_bind_to_address->is_set())
             {
                 settings.tcp.bind_to_address.clear();
@@ -235,6 +265,12 @@ int main(int argc, char* argv[])
 
         LOG(INFO, LOG_TAG) << "Version " << version::code << (!version::rev().empty() ? (", revision " + version::rev(8)) : ("")) << "\n";
 
+        if (source_pipeValue->count() == 1)
+        {
+            LOG(INFO, LOG_TAG) << "Adding pipe: " << source_pipeValue->value(0) << "\n";
+            settings.source_pipe.sources.push_back(source_pipeValue->value(0));
+        }
+
         if (!streamValue->is_set() && !sourceValue->is_set())
             settings.stream.sources.push_back(sourceValue->value());
 
@@ -280,6 +316,10 @@ int main(int argc, char* argv[])
         vector<mDNSService> dns_services;
         dns_services.emplace_back("_snapcast._tcp", settings.stream.port);
         dns_services.emplace_back("_snapcast-stream._tcp", settings.stream.port);
+        if (settings.source_tcp.enabled)
+        {
+            dns_services.emplace_back("_snapcast-source._tcp", settings.source_tcp.port);
+        }
         if (settings.tcp.enabled)
         {
             dns_services.emplace_back("_snapcast-jsonrpc._tcp", settings.tcp.port);
@@ -300,6 +340,18 @@ int main(int argc, char* argv[])
             }
         }
 
+        if (settings.source_tcp.streamChunkMs < 10)
+        {
+            LOG(WARNING, LOG_TAG) << "source.tcp read chunk size is less than 10ms, changing to 10ms\n";
+            settings.source_tcp.streamChunkMs = 10;
+        }
+
+        if (settings.source_pipe.streamChunkMs < 10)
+        {
+            LOG(WARNING, LOG_TAG) << "source.pipe read chunk size is less than 10ms, changing to 10ms\n";
+            settings.source.pipe.streamChunkMs = 10;
+        }
+
         if (settings.stream.streamChunkMs < 10)
         {
             LOG(WARNING, LOG_TAG) << "Stream read chunk size is less than 10ms, changing to 10ms\n";
@@ -307,6 +359,18 @@ int main(int argc, char* argv[])
         }
 
         static constexpr chrono::milliseconds MIN_BUFFER_DURATION = 20ms;
+        if (settings.source_tcp.bufferMs < MIN_BUFFER_DURATION.count())
+        {
+            LOG(WARNING, LOG_TAG) << "Source.tcp buffer is less than " << MIN_BUFFER_DURATION.count() << "ms, changing to " << MIN_BUFFER_DURATION.count() << "ms\n";
+            settings.source_tcp.bufferMs = MIN_BUFFER_DURATION.count();
+        }
+
+        if (settings.source_pipe.bufferMs < MIN_BUFFER_DURATION.count())
+        {
+            LOG(WARNING, LOG_TAG) << "Source.pipe buffer is less than " << MIN_BUFFER_DURATION.count() << "ms, changing to " << MIN_BUFFER_DURATION.count() << "ms\n";
+            settings.source_pipe.bufferMs = MIN_BUFFER_DURATION.count();
+        }
+
         if (settings.stream.bufferMs < MIN_BUFFER_DURATION.count())
         {
             LOG(WARNING, LOG_TAG) << "Buffer is less than " << MIN_BUFFER_DURATION.count() << "ms, changing to " << MIN_BUFFER_DURATION.count() << "ms\n";

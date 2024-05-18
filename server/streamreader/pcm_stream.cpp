@@ -44,18 +44,40 @@ namespace streamreader
 static constexpr auto LOG_TAG = "PcmStream";
 
 
+void PcmStream::setCodec(const std::string& codecSettings) const
+{
+    encoder_ = encoderFactory.createEncoder(uri_.query[kUriCodec]);
+}
+
+
+void PcmStream::setCodec(const StreamUri& uri) const
+{
+    if (uri_.query.find(kUriCodec) == uri_.query.end())
+        throw SnapException("Stream URI must have a codec");
+    encoder_ = setCodec(uri_.query[kUriCodec]);
+}
+
+
+void PcmStream::SetName(const StreamUri& uri) const
+{
+    if (uri_.query.find(kUriName) == uri_.query.end())
+        throw SnapException("Stream URI must have a name");
+    name_ = uri_.query[kUriName];
+}
+
+
+void PcmStream::SetName(const StreamUri& uri) const
+{
+    if (uri_.query.find(kUriName) == uri_.query.end())
+        throw SnapException("Stream URI must have a name");
+    name_ = uri_.query[kUriName];
+}
+
 PcmStream::PcmStream(PcmStream::Listener* pcmListener, boost::asio::io_context& ioc, const ServerSettings& server_settings, const StreamUri& uri)
     : active_(false), strand_(boost::asio::make_strand(ioc.get_executor())), pcmListeners_{pcmListener}, uri_(uri), chunk_ms_(20), state_(ReaderState::kIdle),
       server_settings_(server_settings), req_id_(0), property_timer_(strand_)
 {
-    encoder::EncoderFactory encoderFactory;
-    if (uri_.query.find(kUriCodec) == uri_.query.end())
-        throw SnapException("Stream URI must have a codec");
-    encoder_ = encoderFactory.createEncoder(uri_.query[kUriCodec]);
-
-    if (uri_.query.find(kUriName) == uri_.query.end())
-        throw SnapException("Stream URI must have a name");
-    name_ = uri_.query[kUriName];
+    setCodec(uri_);
 
     if (uri_.query.find(kUriSampleFormat) == uri_.query.end())
         throw SnapException("Stream URI must have a sampleformat");

@@ -434,7 +434,7 @@ void Server::processRequest(const jsonrpcpp::request_ptr request, const OnRespon
                 // clang-format off
                 // Request:      {"id":4,"jsonrpc":"2.0","method":"Stream.Control","params":{"id":"Spotify", "command": "next", params: {}}}
                 // Response:     {"id":4,"jsonrpc":"2.0","result":{"id":"Spotify"}}
-                // 
+                //
                 // Request:      {"id":4,"jsonrpc":"2.0","method":"Stream.Control","params":{"id":"Spotify", "command": "seek", "param": "60000"}}
                 // Response:     {"id":4,"jsonrpc":"2.0","result":{"id":"Spotify"}}
                 // clang-format on
@@ -874,8 +874,10 @@ void Server::start()
         controlServer_ = std::make_unique<ControlServer>(io_context_, settings_.tcp, settings_.http, this);
         streamServer_ = std::make_unique<StreamServer>(io_context_, settings_, this);
         streamManager_ = std::make_unique<StreamManager>(this, io_context_, settings_);
+        socketServer_ = std::make_unique<socketServer(io_context_, streamManager_, settings_.socket);
+        sourceServer_ = std::make_unique<socketServer(io_context_, streamManager_, settings_.source);
 
-        // Add normal sources first
+        // Add normal sources from config first
         for (const auto& sourceUri : settings_.stream.sources)
         {
             StreamUri streamUri(sourceUri);
@@ -885,7 +887,7 @@ void Server::start()
             if (stream)
                 LOG(INFO, LOG_TAG) << "Stream: " << stream->getUri().toJson() << "\n";
         }
-        // Add meta sources second
+        // Add meta sources from config third
         for (const auto& sourceUri : settings_.stream.sources)
         {
             StreamUri streamUri(sourceUri);
@@ -899,6 +901,8 @@ void Server::start()
         streamManager_->start();
         controlServer_->start();
         streamServer_->start();
+        socketServer_->start(true)
+        sourceServer_->start(false);
     }
     catch (const std::exception& e)
     {
@@ -911,6 +915,18 @@ void Server::start()
 
 void Server::stop()
 {
+    if (sourceTcpServer)
+    {
+        sourceTcpServer_->stop();
+        sourceTcpServer_ = nullptr;
+    }
+
+    if (sourcePipeServer)
+    {
+        sourcePipeServer_->stop();
+        sourcePipeServer_ = nullptr;
+    }
+
     if (streamManager_)
     {
         streamManager_->stop();

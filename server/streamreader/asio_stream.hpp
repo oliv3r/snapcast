@@ -194,6 +194,8 @@ void AsioStream<ReadStream>::do_read()
 
         lastException_.clear();
 
+        isConfigChunk(*chunk_));
+
         if (isSilent(*chunk_))
         {
             silence_ += chunk_->duration<std::chrono::microseconds>();
